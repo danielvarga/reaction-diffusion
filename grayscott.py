@@ -19,7 +19,7 @@ import theano as th
 from theano import tensor as T
 
 
-INTERACTIVE = True
+INTERACTIVE = False
 
 
 plt.ion()
@@ -92,7 +92,7 @@ def grayscott_step(U):
     return dst
 
 
-k = 20
+k = 2000
 
 # Batch process k automaton steps together:
 result, updates = th.scan(fn=grayscott_step, outputs_info=U, n_steps=k)
@@ -114,7 +114,7 @@ calc_grayscott = th.function(inputs=[U], outputs=final_result)
 
 U_step = U_arr
 
-for it in range(200):
+for it in range(1):
     print "starting batch", it
     U_step = calc_grayscott(U_step)
     if INTERACTIVE:
