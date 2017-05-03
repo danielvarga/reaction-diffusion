@@ -19,9 +19,10 @@ import theano as th
 from theano import tensor as T
 
 
-INTERACTIVE = False
+INTERACTIVE = True
 
 
+plt.ion()
 fig = plt.figure()
 ax = fig.add_subplot(111)
 
@@ -91,29 +92,33 @@ def grayscott_step(U):
     return dst
 
 
-k = 2000
+k = 20
 
 # Batch process k automaton steps together:
 result, updates = th.scan(fn=grayscott_step, outputs_info=U, n_steps=k)
 assert len(updates)==0
 final_result = result[-1]
 
-print "building grad"
-dOdU = T.grad(final_result[10, 10, 1], U)
-print "compiling grad"
-f = th.function(inputs=[U], outputs=dOdU)
-print "calculating grad"
-grad = f(U_arr)[:, :, 0]
-print "maximal gradient:", np.abs(grad).max()
-print "done"
+TEST_GRAD = True
+if TEST_GRAD:
+    print "building grad"
+    dOdU = T.grad(final_result[10, 10, 1], U)
+    print "compiling grad"
+    f = th.function(inputs=[U], outputs=dOdU)
+    print "calculating grad"
+    grad = f(U_arr)[:, :, 0]
+    print "maximal gradient:", np.abs(grad).max()
+    print "done"
 
 calc_grayscott = th.function(inputs=[U], outputs=final_result)
 
 U_step = U_arr
 
-for it in range(1):
+for it in range(200):
     print "starting batch", it
     U_step = calc_grayscott(U_step)
+    if INTERACTIVE:
+        draw_plot(x_arr, y_arr, U_step)
 
 print "ended"
 
