@@ -11,27 +11,31 @@
 
 import matplotlib
 import matplotlib.pyplot as plt
+import scipy.misc
 import numpy as np
 import time
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
 
 import theano as th
 from theano import tensor as T
 
 
-plt.ion()
+INTERACTIVE = False
+
+
 fig = plt.figure()
 ax = fig.add_subplot(111)
 
 def draw_plot(x, y, U_orig):
     U = U_orig[:, :, [0,2,1]]
     U[:, :, 0] = 1 - U[:, :, 0]
-    ax.clear()
-    ax.axis("off")
-    ax.imshow(U)
-    plt.pause(1e-6)
-    plt.show()
+    scipy.misc.imsave("vis.png", U)
+
+    if INTERACTIVE:
+        ax.clear()
+        ax.axis("off")
+        ax.imshow(U)
+        plt.pause(1e-6)
+        plt.show()
 
 
 m = 200
@@ -87,16 +91,30 @@ def grayscott_step(U):
     return dst
 
 
-k = 10
+k = 2000
 
-# Batch process the PDE calculation, calculate together k steps
+# Batch process k automaton steps together:
 result, updates = th.scan(fn=grayscott_step, outputs_info=U, n_steps=k)
+assert len(updates)==0
 final_result = result[-1]
-calc_grayscott = th.function(inputs=[U], outputs=final_result, updates=updates)
+
+print "building grad"
+dOdU = T.grad(final_result[10, 10, 1], U)
+print "compiling grad"
+f = th.function(inputs=[U], outputs=dOdU)
+print "calculating grad"
+grad = f(U_arr)[:, :, 0]
+print "maximal gradient:", np.abs(grad).max()
+print "done"
+
+calc_grayscott = th.function(inputs=[U], outputs=final_result)
 
 U_step = U_arr
 
-for it in range(20000):
-    # Every k steps, draw the graphics
+for it in range(1):
+    print "starting batch", it
     U_step = calc_grayscott(U_step)
-    draw_plot(x_arr, y_arr, U_step)
+
+print "ended"
+
+draw_plot(x_arr, y_arr, U_step)
