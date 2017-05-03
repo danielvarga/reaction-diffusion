@@ -26,6 +26,7 @@ ax = fig.add_subplot(111)
 
 def draw_plot(x, y, U_orig):
     U = U_orig[:, :, [0,2,1]]
+    U[:, :, 0] = 1 - U[:, :, 0]
     ax.clear()
     ax.axis("off")
     ax.imshow(U)
@@ -66,18 +67,23 @@ e = n
 s = [0] + list(range(0, m-2))
 w = s
 
+Du = 0.2297 # 0.2097 in https://github.com/pmneila/jsexp/blob/master/grayscott/index.html#L55
+Dv = 0.105
+preset = "default"
+if preset=="worms":
+    feed, kill = 0.078, 0.061
+elif preset=="default":
+    feed, kill = 0.037, 0.060
 
-feed = 0.037
-kill = 0.06
 delta = 1.0
 
 def grayscott_step(U):
     lapl = U[n, :]+U[:, e]+U[s, :]+U[:, w] - 4*U
-    r = U[:, :, 0]
-    g = U[:, :, 1]
-    du = 0.2097*lapl[:, :, 0] - r*g*g + feed*(1.0 - r)
-    dv = 0.105 *lapl[:, :, 1] + r*g*g - (feed+kill)*g
-    dst = T.stack((r+du, g+dv, U[:, :, 2]), axis=-1)
+    u = U[:, :, 0]
+    v = U[:, :, 1]
+    du = Du*lapl[:, :, 0] - u*v*v + feed*(1.0 - u)
+    dv = Dv*lapl[:, :, 1] + u*v*v - (feed+kill)*v
+    dst = T.stack((u+delta*du, v+delta*dv, U[:, :, 2]), axis=-1)
     return dst
 
 
