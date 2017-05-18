@@ -19,7 +19,7 @@ import theano as th
 from theano import tensor as T
 
 
-INTERACTIVE = False
+INTERACTIVE = True
 
 
 plt.ion()
@@ -83,23 +83,33 @@ elif preset=="default":
 delta = 1.0
 
 def grayscott_step(U):
-    lapl = U[n, :]+U[:, e]+U[s, :]+U[:, w] - 4*U
     u = U[:, :, 0]
     v = U[:, :, 1]
-    du = Du*lapl[:, :, 0] - u*v*v + feed*(1.0 - u)
-    dv = Dv*lapl[:, :, 1] + u*v*v - (feed+kill)*v
-    dst = T.stack((u+delta*du, v+delta*dv, U[:, :, 2]), axis=-1)
+    diamond = np.array([[0,1,0], [1,0,1], [0,1,0]]).reshape((1,3,3,1)).astype(np.float32)
+    filters = th.shared(diamond)
+    def conv(x):
+        return T.nnet.conv2d(x.reshape((1, m, m, 1)), filters,
+                input_shape=(1, m, m, 1), filter_shape=(1, 3, 3, 1), border_mode='half')[0]
+    # lapl = U[n, :]+U[:, e]+U[s, :]+U[:, w] - 4*U
+    du = Du * conv(u) - u*v*v + feed*(1.0 - u)
+    dv = Dv * conv(v) + u*v*v - (feed+kill)*v
+    dst = T.stack((u+delta*du, v+delta*dv, u+delta*du), axis=-1)
     return dst
 
 
-k = 2000
+s = grayscott_step(U)
+calc_grayscott = th.function(inputs=[U], outputs=s)
+print U_arr.shape, calc_grayscott(U_arr).shape
+
+
+k = 10
 
 # Batch process k automaton steps together:
 result, updates = th.scan(fn=grayscott_step, outputs_info=U, n_steps=k)
 assert len(updates)==0
 final_result = result[-1]
 
-TEST_GRAD = True
+TEST_GRAD = False
 if TEST_GRAD:
     print "building grad"
     dOdU = T.grad(final_result[10, 10, 1], U)
@@ -114,9 +124,11 @@ calc_grayscott = th.function(inputs=[U], outputs=final_result)
 
 U_step = U_arr
 
-for it in range(1):
-    print "starting batch", it
+for it in range(10000):
+    # print "starting batch", it
+    # U_step += np.random.normal(scale=0.06, size=U_step.shape)
     U_step = calc_grayscott(U_step)
+    U_step[:, :, 2] = 0
     if INTERACTIVE:
         draw_plot(x_arr, y_arr, U_step)
 

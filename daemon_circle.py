@@ -57,14 +57,15 @@ for d in np.arange(0.0, 2*np.pi, 2*np.pi/10000):
     taken.add((x,y))
     col = (col+1)%K
 
+RADIUS = 1
 
 def demon_step(U, mask):
-    r = 1
     Uprime = U.copy()
     for i in range(m):
         for j in range(m):
             nxt = (U[i, j] + 1) % K
-            q = (U[max((i-r,0)):i+r+1, max((j-r,0)):j+r+1]==nxt).sum()
+            box = U[max((i-RADIUS,0)):i+RADIUS+1, max((j-RADIUS,0)):j+RADIUS+1]
+            q = (box==nxt).sum()
             if q>0:
                 Uprime[i, j] = nxt
                 mask[i, j] = 1
