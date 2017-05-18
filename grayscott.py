@@ -40,7 +40,7 @@ def draw_plot(x, y, U_orig):
 
 
 m = 200
-mesh_range = np.arange(-1, 1, 2./(m-1))
+mesh_range = np.arange(-1, 1, 2./m)
 x_arr, y_arr = np.meshgrid(mesh_range, mesh_range)
 
 # Initialize variables
@@ -67,9 +67,9 @@ U = T.tensor3("U")
 
 draw_plot(x_arr, y_arr, U_arr)
 
-n = list(range(1, m-1)) + [m-2]
+n = list(range(1, m)) + [m-1]
 e = n
-s = [0] + list(range(0, m-2))
+s = [0] + list(range(0, m-1))
 w = s
 
 Du = 0.2297 # 0.2097 in https://github.com/pmneila/jsexp/blob/master/grayscott/index.html#L55
@@ -83,26 +83,33 @@ elif preset=="default":
 delta = 1.0
 
 def grayscott_step(U):
+    lapl = U[n, :]+U[:, e]+U[s, :]+U[:, w] - 4*U
     u = U[:, :, 0]
     v = U[:, :, 1]
-    diamond = np.array([[0,1,0], [1,0,1], [0,1,0]]).reshape((1,3,3,1)).astype(np.float32)
-    filters = th.shared(diamond)
-    def conv(x):
-        return T.nnet.conv2d(x.reshape((1, m, m, 1)), filters,
-                input_shape=(1, m, m, 1), filter_shape=(1, 3, 3, 1), border_mode='half')[0]
-    # lapl = U[n, :]+U[:, e]+U[s, :]+U[:, w] - 4*U
-    du = Du * conv(u) - u*v*v + feed*(1.0 - u)
-    dv = Dv * conv(v) + u*v*v - (feed+kill)*v
-    dst = T.stack((u+delta*du, v+delta*dv, u+delta*du), axis=-1)
+    du = Du*lapl[:, :, 0] - u*v*v + feed*(1.0 - u)
+    dv = Dv*lapl[:, :, 1] + u*v*v - (feed+kill)*v
+    dst = T.stack((u+delta*du, v+delta*dv, U[:, :, 2]), axis=-1)
     return dst
 
 
-s = grayscott_step(U)
-calc_grayscott = th.function(inputs=[U], outputs=s)
-print U_arr.shape, calc_grayscott(U_arr).shape
+diamond = np.array([[0,1,0], [1,0,1], [0,1,0]]).reshape((1,1,3,3)).astype(np.float32)
+filters = th.shared(diamond)
 
 
-k = 10
+# Currently not working, and it's not faster than the smart-indexing solution anyway.
+def grayscott_step_convolutional(U):
+    u = U[:, :, 0]
+    v = U[:, :, 1]
+    def conv(x):
+        return T.nnet.conv2d(x.reshape((1, 1, m, m)), filters,
+                input_shape=(1, 1, m, m), filter_shape=(1, 1, 3, 3), border_mode='half')[0, 0]
+    du = Du * conv(u) - u*v*v + feed*(1.0 - u)
+    dv = Dv * conv(v) + u*v*v - (feed+kill)*v
+    dst = T.stack((u+delta*du, v+delta*dv, u), axis=-1)
+    return dst
+
+
+k = 100
 
 # Batch process k automaton steps together:
 result, updates = th.scan(fn=grayscott_step, outputs_info=U, n_steps=k)
@@ -124,8 +131,10 @@ calc_grayscott = th.function(inputs=[U], outputs=final_result)
 
 U_step = U_arr
 
-for it in range(10000):
-    # print "starting batch", it
+print "batch size", k
+
+for it in range(2000 // k):
+    print "starting batch", it
     # U_step += np.random.normal(scale=0.06, size=U_step.shape)
     U_step = calc_grayscott(U_step)
     U_step[:, :, 2] = 0
